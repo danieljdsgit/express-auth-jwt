@@ -28,7 +28,7 @@ router.get("/signup", (req, res, next) => {
  * @access  Public
  */
 
-router.post("/signup", (req, res, next) => {
+router.post("/signup", async (req, res, next) => {
   // desestructuramos el email y el password de req.body
   const { email, password } = req.body;
 
@@ -39,34 +39,30 @@ router.post("/signup", (req, res, next) => {
     });
     return;
   }
-  // buscamos el usuario por el campo email
-  User.findOne({ email })
-    .then((user) => {
-      // si existiera en la base de datos, renderizamos la vista de auth/signup con un mensaje de error
-      if (user !== null) {
-        res.render("auth/signup", {
-          errorMessage: "The username already exists!",
-        });
-        return;
-      }
-      // creamos la salt y hacemos hash del password
-      const salt = bcrypt.genSaltSync(bcryptSalt);
-      const hashPass = bcrypt.hashSync(password, salt);
-      // creamos el usuario y luego renderizamos la vista de home con un mensaje de éxito
-      User.create({
-        email,
-        password: hashPass,
-      })
-        .then(() => {
-          res.render("home", { message: "User created!" });
-        })
-        .catch((error) => {
-          console.log(error);
-        });
-    })
-    .catch((error) => {
-      next(error);
+
+  try {
+    // buscamos el usuario por el campo email
+    const user = await User.findOne({ email });
+    // si existiera en la base de datos, renderizamos la vista de auth/signup con un mensaje de error
+    if (user !== null) {
+      res.render("auth/signup", {
+        errorMessage: "The username already exists!",
+      });
+      return;
+    }
+    // creamos la salt y hacemos hash del password
+    const salt = bcrypt.genSaltSync(bcryptSalt);
+    const hashPass = bcrypt.hashSync(password, salt);
+
+    // creamos el usuario y luego renderizamos la vista de home con un mensaje de éxito
+    await User.create({
+      email,
+      password: hashPass,
     });
+    res.render("home", { message: "User created!" });
+  } catch (error) {
+    next(error);
+  }
 });
 
 /**
@@ -145,6 +141,9 @@ router.get("/secret", withAuth, (req, res, next) => {
   } else {
     // en caso contrario (si no hay token) redirigimos a la home
     res.redirect("/");
+    /* res.status(401).render("home", {
+      errorMessage: "Unauthorized: No token provided",
+    }); */
   }
 });
 
@@ -155,10 +154,6 @@ router.get("/secret", withAuth, (req, res, next) => {
  */
 
 router.get("/logout", withAuth, function (req, res) {
-  //res.cookie("token", "deleted", { httpOnly: true });
-  //res.clearCookie("token", { httpOnly: true });
-  //res.cookie("token", "", { expires: new Date(0),domain:'.localhost:3000', path: '/' });
-
   // seteamos el token con un valor vacío y una fecha de expiración en el pasado (Jan 1st 1970 00:00:00 GMT)
   res.cookie("token", "", { expires: new Date(0) });
   res.redirect("/");
